@@ -19,7 +19,7 @@ function dispatchContent(content: string) {
 type R = Record<string, unknown>
 
 function getGenModel(env: Env) {
-	const model = env.DEFULT_GEMINI_MODEL;
+	const model = env.DEFAULT_GEMINI_MODEL;
 	const gateway_name = env.CLOUD_FLARE_AI_GATEWAY_NAME;
 	const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
 	const account_id = env.account_id;
