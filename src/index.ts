@@ -99,170 +99,179 @@ export default {
 		console.log("cron processed");
 	},
 	fetch: async (request: Request, env: Env, ctx: ExecutionContext) => {
-		const bot = new TelegramBot(env.SECRET_TELEGRAM_API_TOKEN);
-		await bot
-			.on('status', async (bot) => {
-				await bot.reply('我家还蛮大的');
-				return new Response('ok');
-			})
-			.on("query", async (bot) => {
-				const groupId = bot.update.message!.chat.id;
-				const messageText = bot.update.message!.text || "";
-				if (!messageText.split(" ")[1]) {
-					await bot.reply('请输入要查询的关键词');
-					return new Response('ok');
-				}
-				const { results } = await env.DB.prepare(`
-					SELECT * FROM Messages
-					WHERE groupId=? AND content GLOB ?
-					ORDER BY timeStamp ASC
-					LIMIT 2000`)
-					.bind(groupId, `*${messageText.split(" ")[1]}*`)
-					.all();
-				await bot.reply(`查询结果:${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "" : `[link](https://t.me/c/${parseInt(r.groupId.slice(2))}/${r.messageId})`}`).join('\n')}`, "Markdown");
-				return new Response('ok');
-			})
-			.on("ask", async (bot) => {
-				const groupId = bot.update.message!.chat.id;
-				const messageText = bot.update.message!.text || "";
-				if (!messageText.split(" ")[1]) {
-					await bot.reply('请输入要问的问题');
-					return new Response('ok');
-				}
-				const { results } = await env.DB.prepare(`
-					SELECT * FROM Messages
-					WHERE groupId=?
-					ORDER BY timeStamp ASC
-					LIMIT 2000`)
-					.bind(groupId)
-					.all();
-				const result = await getGenModel(env).generateContent([
-					`用符合风格的语气回答这个问题:`,
-					getCommandVar(messageText, " "),
-					`上下文如下:`,
-					...results.flatMap((r: R) => [`${r.userName as string}: `, dispatchContent(r.content as string)])
-				]);
-				await bot.reply(telegramifyMarkdown(result.response.text(), "keep"), 'Markdown');
-				return new Response('ok');
-			})
-			.on("summary", async (bot) => {
-				const groupId = bot.update.message!.chat.id;
-				if (bot.update.message!.text!.split(" ").length === 1) {
-					await bot.reply('请输入要查询的时间范围/消息数量, 如 /summary 114h 或 /summary 514');
-					return new Response('ok');
-				}
-				const summary = bot.update.message!.text!.split(" ")[1];
-				let results: Record<string, unknown>[];
-				try {
-					const test = parseInt(summary);
-					if (isNaN(test)) {
-						throw new Error("not a number");
-					}
-					if (test < 0) {
-						throw new Error("negative number");
-					}
-					if (!isFinite(test)) {
-						throw new Error("infinite number");
-					}
-				}
-				catch (e: any) {
-					await bot.reply('请输入要查询的时间范围/消息数量, 如 /summary 114h 或 /summary 514  ' + e.message);
-					return new Response('ok');
-				}
-				if (summary.endsWith("h")) {
-					results = (await env.DB.prepare(`
-						SELECT *
-						FROM Messages
-						WHERE groupId=? AND timeStamp >= ?
-						ORDER BY timeStamp ASC
-						LIMIT 2000`)
-						.bind(groupId, Date.now() - parseInt(summary) * 60 * 60 * 1000)
-						.all()).results;
-				}
-				else {
-					results = (await env.DB.prepare(`
-						SELECT * FROM Messages
-						WHERE groupId=?
-						ORDER BY timeStamp DESC
-						LIMIT ?`)
-						.bind(groupId, parseInt(summary))
-						.all()).results;
-				}
-				if (results.length > 0) {
-					const result = await getGenModel(env).generateContent(
-						[
-							`用符合风格的语气概括下面的对话, 如果对话里出现了多个主题, 请分条概括,`,
-							`群聊总结如下:`,
-							...results.map((r: any) => `${r.userName}: ${r.content}`)
-						]
-					);
-					await bot.reply(telegramifyMarkdown(result.response.text(), 'keep'), 'Markdown');
-				}
-				return new Response('ok');
-			})
-			.on(':message', async (bot) => {
-				if (!bot.update.message!.chat.type.includes('group')) {
-					await bot.reply('I am a bot, please add me to a group to use me.');
-					return new Response('ok');
-				}
-				function getUserName(msg: any) {
-					if (msg.from?.username === "Channel_Bot" && msg.from?.is_bot) {
-						return msg.sender_chat.title as string;
-					}
-					return msg.from?.first_name as string || "anonymous";
-				}
-				switch (bot.update_type) {
-					case 'message': {
-						const msg = bot.update.message!;
-						const groupId = msg.chat.id;
-						const content = msg.text || "";
-						const messageId = msg.message_id;
-						const groupName = msg.chat.title || "anonymous";
-						const timeStamp = Date.now();
-						const userName = getUserName(msg);
-						await env.DB.prepare(`
-							INSERT INTO Messages(id, groupId, timeStamp, userName, content, messageId, groupName) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-							.bind(
-								crypto.randomUUID(),
-								groupId,
-								timeStamp,
-								userName, // not interested in user id
-								content,
-								messageId,
-								groupName
-							)
-							.run();
-						return new Response('ok');
+		const bot = new Bot(env.SECRET_TELEGRAM_API_TOKEN);
+		bot.command('status', async (ctx) => {
+            await ctx.reply('我家还蛮大的',{reply_parameters: {message_id: ctx.msg.message_id},});
+        });
 
-					}
-					case "photo": {
-						const msg = bot.update.message!;
-						const groupId = msg.chat.id;
-						const messageId = msg.message_id;
-						const groupName = msg.chat.title || "anonymous";
-						const timeStamp = Date.now();
-						const userName = getUserName(msg);
-						const photo = msg.photo![msg.photo!.length - 1];
-						const file = await bot.getFile(photo.file_id).then((response) => response.arrayBuffer());
+  	bot.command('query', async (ctx) => {
+        const messageText = ctx.message?.text || "";
+        const groupId = ctx.chat.id;
 
-						await env.DB.prepare(`
-							INSERT INTO Messages(id, groupId, timeStamp, userName, content, messageId, groupName) VALUES (?, ?, ?, ?, ?, ?, ?)`)
-							.bind(
-								crypto.randomUUID(),
-								groupId,
-								timeStamp,
-								userName, // not interested in user id
-								"data:image/jpeg;base64," + Buffer.from(file).toString("base64"),
-								messageId,
-								groupName
-							)
-							.run();
-						return new Response('ok');
-					}
-				}
-				return new Response('ok');
-			})
-			.handle(request.clone());
+        if (!messageText.split(" ")[1]) {
+					await ctx.reply('请输入要查询的关键词', {reply_parameters: {message_id:ctx.msg.message_id},});
+            return;
+        }
+
+        const { results } = await env.DB.prepare(`
+            SELECT * FROM Messages
+            WHERE groupId=? AND content GLOB ?
+            ORDER BY timeStamp ASC
+            LIMIT 2000`)
+            .bind(groupId, `*${messageText.split(" ")[1]}*`)
+            .all();
+
+        await ctx.reply(
+            `查询结果:${results.map((r: any) =>
+                `${r.userName}: ${r.content} ${r.messageId == null ? "" : `[link](https://t.me/c/${parseInt(r.groupId.slice(2))}/${r.messageId})`}`
+            ).join('\n')}`,
+            { parse_mode: "Markdown",reply_parameters: {message_id: ctx.msg.message_id},}
+        );
+    });
+
+   	// Ask command
+   	bot.command('ask', async (ctx) => {
+       const messageText = ctx.message?.text || "";
+       const groupId = ctx.chat.id;
+
+       if (!messageText.split(" ")[1]) {
+           await ctx.reply('请输入要问的问题');
+           return;
+       }
+
+       const { results } = await env.DB.prepare(`
+           SELECT * FROM Messages
+           WHERE groupId=?
+           ORDER BY timeStamp ASC
+           LIMIT 2000`)
+           .bind(groupId)
+           .all();
+
+       const result = await getGenModel(env).generateContent([
+           `用符合风格的语气回答这个问题:`,
+           getCommandVar(messageText, " "),
+           `上下文如下:`,
+           ...results.flatMap((r: any) => [`${r.userName}: `, dispatchContent(r.content)])
+       ]);
+
+       await ctx.reply(telegramifyMarkdown(result.response.text(), "keep"), { parse_mode: "Markdown",reply_parameters: {message_id: ctx.msg.message_id},});
+   	});
+
+    // Summary command
+    bot.command('summary', async (ctx) => {
+        const messageText = ctx.message?.text || "";
+        const groupId = ctx.chat.id;
+
+        if (messageText.split(" ").length === 1) {
+            await ctx.reply('请输入要查询的时间范围/消息数量, 如 /summary 114h 或 /summary 514');
+            return;
+        }
+
+        const summary = messageText.split(" ")[1];
+        let results: Record<string, unknown>[];
+
+        try {
+            const test = parseInt(summary);
+            if (isNaN(test) || test < 0 || !isFinite(test)) {
+                throw new Error("Invalid number");
+            }
+        }
+        catch (e: any) {
+            await ctx.reply('请输入要查询的时间范围/消息数量, 如 /summary 114h 或 /summary 514  ' + e.message);
+            return;
+        }
+
+        if (summary.endsWith("h")) {
+            results = (await env.DB.prepare(`
+                SELECT *
+                FROM Messages
+                WHERE groupId=? AND timeStamp >= ?
+                ORDER BY timeStamp ASC
+                LIMIT 2000`)
+                .bind(groupId, Date.now() - parseInt(summary) * 60 * 60 * 1000)
+                .all()).results;
+        }
+        else {
+            results = (await env.DB.prepare(`
+                SELECT * FROM Messages
+                WHERE groupId=?
+                ORDER BY timeStamp DESC
+                LIMIT ?`)
+                .bind(groupId, parseInt(summary))
+                .all()).results;
+        }
+
+        if (results.length > 0) {
+            const result = await getGenModel(env).generateContent(
+                [
+                    `用符合风格的语气概括下面的对话, 如果对话里出现了多个主题, 请分条概括,`,
+                    `群聊总结如下:`,
+                    ...results.map((r: any) => `${r.userName}: ${r.content}`)
+                ]
+            );
+            await ctx.reply(telegramifyMarkdown(result.response.text(), 'keep'), { parse_mode: "Markdown",reply_parameters: {message_id: ctx.msg.message_id},});
+        }
+    });
+    bot.on('message', async (ctx) => {
+	    // Check if message is from a group
+	    if (!ctx.chat.type.includes('group')) {
+	        await ctx.reply('I am a bot, please add me to a group to use me.');
+	        return;
+	    }
+
+	    function getUserName(msg: any) {
+	        if (msg.from?.username === "Channel_Bot" && msg.from?.is_bot) {
+	            return msg.sender_chat.title as string;
+	        }
+	        return msg.from?.first_name as string || "anonymous";
+	    }
+
+	    const msg = ctx.message;
+	    const groupId = ctx.chat.id;
+	    const messageId = msg.message_id;
+	    const groupName = ctx.chat.title || "anonymous";
+	    const timeStamp = Date.now();
+	    const userName = getUserName(msg);
+
+	    // Handle text messages
+	    if (msg.text) {
+	        await env.DB.prepare(`
+	            INSERT INTO Messages(id, groupId, timeStamp, userName, content, messageId, groupName) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+	            .bind(
+	                crypto.randomUUID(),
+	                groupId,
+	                timeStamp,
+	                userName, // not interested in user id
+	                msg.text,
+	                messageId,
+	                groupName
+	            )
+	            .run();
+	    }
+
+	    // Handle photo messages
+	    if (msg.photo) {
+				const photo = msg.photo[msg.photo.length - 1];
+				const file = await ctx.api.getFile(photo.file_id);
+				const response = await fetch(`https://api.telegram.org/file/bot${env.SECRET_TELEGRAM_API_TOKEN}/${file.file_path}`);
+        const arrayBuffer = await response.arrayBuffer();
+
+        await env.DB.prepare(`
+            INSERT INTO Messages(id, groupId, timeStamp, userName, content, messageId, groupName) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+            .bind(
+                crypto.randomUUID(),
+                groupId,
+                timeStamp,
+                userName, // not interested in user id
+                "data:image/jpeg;base64," + Buffer.from(arrayBuffer).toString("base64"),
+                messageId,
+                groupName
+        )
+        .run();
+	    }
+    });
+	  await bot.init();
+    await bot.handleUpdate(await request.json());
 		return new Response('ok');
 	},
 };
