@@ -19,6 +19,7 @@
   "dependencies": {
     "@codebam/cf-workers-telegram-bot": "^7.27.0",
     "@google/generative-ai": "^0.21.0",
+    "grammy": "^1.33.0",
     "openai": "^4.75.0",
     "telegramify-markdown": "^1.2.2"
   },

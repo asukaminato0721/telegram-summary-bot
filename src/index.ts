@@ -2,6 +2,7 @@ import TelegramBot, { TelegramApi } from '@codebam/cf-workers-telegram-bot';
 import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
 import telegramifyMarkdown from "telegramify-markdown"
 import { Buffer } from 'node:buffer';
+import { Bot } from "grammy";
 
 function dispatchContent(content: string) {
 	if (content.startsWith("data:image/jpeg;base64,")) {
@@ -57,6 +58,7 @@ export default {
 		ctx: ExecutionContext,
 	) {
 		const { results: groups } = await env.DB.prepare('SELECT DISTINCT groupId FROM Messages').all();
+		const bot = new Bot(env.SECRET_TELEGRAM_API_TOKEN);
 
 		for (const group of groups) {
 			try {
@@ -74,18 +76,12 @@ export default {
 						// todo: use cloudflare r2 to store skip list
 						continue;
 					}
-					// Use fetch to send message directly to Telegram API
-					await fetch(`https://api.telegram.org/bot${env.SECRET_TELEGRAM_API_TOKEN}/sendMessage`, {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-						},
-						body: JSON.stringify({
-							chat_id: group.groupId,
-							text: telegramifyMarkdown(result.response.text(), 'keep'),
-							parse_mode: "Markdown",
-						}),
-					});
+					// Use grammy to send message to Telegram API
+					await bot.api.sendMessage(
+						group.groupId,
+						result.response.text(),
+						{ parse_mode: "Markdown" },
+					);
 					// Clean up old messages
 					await env.DB.prepare(`
 						DELETE
