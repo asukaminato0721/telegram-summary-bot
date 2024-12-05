@@ -77,11 +77,15 @@ export default {
 						continue;
 					}
 					// Use grammy to send message to Telegram API
-					await bot.api.sendMessage(
-						group.groupId,
-						result.response.text(),
-						{ parse_mode: "Markdown" },
-					);
+					try {
+						await bot.api.sendMessage(
+							group.groupId,
+							result.response.text(),
+							{ parse_mode: "Markdown" },
+						);
+					} catch (error) {
+						console.error(`Failed to send message to group ${group.groupId}:`, error);
+					}
 					// Clean up old messages
 					await env.DB.prepare(`
 						DELETE
