@@ -2,6 +2,7 @@ import TelegramBot, { TelegramApi } from '@codebam/cf-workers-telegram-bot';
 import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/generative-ai';
 import telegramifyMarkdown from "telegramify-markdown"
 import { Buffer } from 'node:buffer';
+import { Bot } from "grammy";
 
 function dispatchContent(content: string) {
 	if (content.startsWith("data:image/jpeg;base64,")) {
@@ -18,8 +19,8 @@ function dispatchContent(content: string) {
 type R = Record<string, unknown>
 
 function getGenModel(env: Env) {
-	const model = "gemini-1.5-flash";
-	const gateway_name = "telegram-summary-bot";
+	const model = env.DEFULT_GEMINI_MODEL;
+	const gateway_name = env.CLOUD_FLARE_AI_GATEWAY_NAME;
 	const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
 	const account_id = env.account_id;
 	const safetySettings = [
@@ -57,6 +58,7 @@ export default {
 		ctx: ExecutionContext,
 	) {
 		const { results: groups } = await env.DB.prepare('SELECT DISTINCT groupId FROM Messages').all();
+		const bot = new Bot(env.SECRET_TELEGRAM_API_TOKEN);
 
 		for (const group of groups) {
 			try {
@@ -74,18 +76,12 @@ export default {
 						// todo: use cloudflare r2 to store skip list
 						continue;
 					}
-					// Use fetch to send message directly to Telegram API
-					await fetch(`https://api.telegram.org/bot${env.SECRET_TELEGRAM_API_TOKEN}/sendMessage`, {
-						method: 'POST',
-						headers: {
-							'Content-Type': 'application/json',
-						},
-						body: JSON.stringify({
-							chat_id: group.groupId,
-							text: telegramifyMarkdown(result.response.text(), 'keep'),
-							parse_mode: "Markdown",
-						}),
-					});
+					// Use grammy to send message to Telegram API
+					await bot.api.sendMessage(
+						group.groupId,
+						result.response.text(),
+						{ parse_mode: "Markdown" },
+					);
 					// Clean up old messages
 					await env.DB.prepare(`
 						DELETE
@@ -123,8 +119,7 @@ export default {
 					LIMIT 2000`)
 					.bind(groupId, `*${messageText.split(" ")[1]}*`)
 					.all();
-				await bot.reply(`查询结果:
-${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "" : `[link](https://t.me/c/${parseInt(r.groupId.slice(2))}/${r.messageId})`}`).join('\n')}`, "Markdown");
+				await bot.reply(`查询结果:${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "" : `[link](https://t.me/c/${parseInt(r.groupId.slice(2))}/${r.messageId})`}`).join('\n')}`, "Markdown");
 				return new Response('ok');
 			})
 			.on("ask", async (bot) => {
