@@ -18,8 +18,8 @@ function dispatchContent(content: string) {
 type R = Record<string, unknown>
 
 function getGenModel(env: Env) {
-	const model = "gemini-1.5-flash";
-	const gateway_name = "telegram-summary-bot";
+	const model = env.DEFULT_GEMINI_MODEL;
+	const gateway_name = env.CLOUD_FLARE_AI_GATEWAY_NAME;
 	const genAI = new GoogleGenerativeAI(env.GEMINI_API_KEY);
 	const account_id = env.account_id;
 	const safetySettings = [
@@ -123,8 +123,7 @@ export default {
 					LIMIT 2000`)
 					.bind(groupId, `*${messageText.split(" ")[1]}*`)
 					.all();
-				await bot.reply(`查询结果:
-${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "" : `[link](https://t.me/c/${parseInt(r.groupId.slice(2))}/${r.messageId})`}`).join('\n')}`, "Markdown");
+				await bot.reply(`查询结果:${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "" : `[link](https://t.me/c/${parseInt(r.groupId.slice(2))}/${r.messageId})`}`).join('\n')}`, "Markdown");
 				return new Response('ok');
 			})
 			.on("ask", async (bot) => {
