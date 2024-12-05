@@ -176,7 +176,7 @@ export default {
 
         try {
             const test = parseInt(summary);
-            if (isNaN(test) || test < 0 || !isFinite(test)) {
+            if (Number.isNaN(test) || test < 0 || !Number.isFinite(test)) {
                 throw new Error("Invalid number");
             }
         }
