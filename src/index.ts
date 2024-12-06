@@ -3,6 +3,7 @@ import { GoogleGenerativeAI, HarmBlockThreshold, HarmCategory } from '@google/ge
 import telegramifyMarkdown from "telegramify-markdown"
 import { Buffer } from 'node:buffer';
 import { Bot } from "grammy";
+import { initialize } from './init.js';
 
 function dispatchContent(content: string) {
 	if (content.startsWith("data:image/jpeg;base64,")) {
@@ -72,10 +73,6 @@ export default {
 						`概括的开头是: 本日群聊总结如下：`,
 						...results.flatMap((r: R) => [`${r.userName as string}: `, dispatchContent(r.content as string)])
 					]);
-					if ([-1001687785734].includes(parseInt(group.groupId as string))) {
-						// todo: use cloudflare r2 to store skip list
-						continue;
-					}
 					// Use grammy to send message to Telegram API
 					try {
 						await bot.api.sendMessage(
@@ -103,10 +100,27 @@ export default {
 		console.log("cron processed");
 	},
 	fetch: async (request: Request, env: Env, ctx: ExecutionContext) => {
+		const url = new URL(request.url);
 		const bot = new Bot(env.SECRET_TELEGRAM_API_TOKEN);
+		if (url.pathname === '/init') {
+			return initialize(request, env, bot);
+		}
 		bot.command('status', async (ctx) => {
-            await ctx.reply('我家还蛮大的',{reply_parameters: {message_id: ctx.msg.message_id},});
-        });
+			try {
+				const dbStatus = await env.DB.prepare('SELECT 1').run();
+				const currentTime = new Date().toISOString();
+				if (dbStatus.success) {
+					await ctx.reply(`*Status: Healthy*\n*Database: Connected*\n*Time: ${currentTime}*`, { parse_mode: "Markdown", reply_parameters: { message_id: ctx.msg.message_id } });
+				} else {
+					await ctx.reply(`*Status: Healthy*\n*Database: Disconnected*\n*Time: ${currentTime}*`, { parse_mode: "Markdown", reply_parameters: { message_id: ctx.msg.message_id } });
+				}
+			} catch (error) {
+				const currentTime = new Date().toISOString();
+				console.error('Error checking database status:', error);
+				await ctx.reply(`*Status: Error*\n*Database: Disconnected*\n*Time: ${currentTime}*`, { parse_mode: "Markdown", reply_parameters: { message_id: ctx.msg.message_id } });
+			}
+		});
+
 
   	bot.command('query', async (ctx) => {
         const messageText = ctx.message?.text || "";
@@ -158,7 +172,7 @@ export default {
            ...results.flatMap((r: any) => [`${r.userName}: `, dispatchContent(r.content)])
        ]);
 
-       await ctx.reply(telegramifyMarkdown(result.response.text(), "keep"), { parse_mode: "Markdown",reply_parameters: {message_id: ctx.msg.message_id},});
+       await ctx.reply(result.response.text(), { parse_mode: "Markdown",reply_parameters: {message_id: ctx.msg.message_id},});
    	});
 
     // Summary command
@@ -208,12 +222,12 @@ export default {
         if (results.length > 0) {
             const result = await getGenModel(env).generateContent(
                 [
-                    `用符合风格的语气概括下面的对话, 如果对话里出现了多个主题, 请分条概括,`,
+                    `用中文符合风格的语气概括下面的对话, 如果对话里出现了多个主题, 请分条概括,`,
                     `群聊总结如下:`,
                     ...results.map((r: any) => `${r.userName}: ${r.content}`)
                 ]
             );
-            await ctx.reply(telegramifyMarkdown(result.response.text(), 'keep'), { parse_mode: "Markdown",reply_parameters: {message_id: ctx.msg.message_id},});
+            await ctx.reply(result.response.text(), { parse_mode: "Markdown",reply_parameters: {message_id: ctx.msg.message_id},});
         }
     });
     bot.on('message', async (ctx) => {
