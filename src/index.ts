@@ -115,7 +115,7 @@ type R = {
 	messageId: number;
 	timeStamp: number;
 }
-const model = "gemini-2.5-flash";
+const model = "gemini-2.5-flash-preview-09-2025";
 const reasoning_effort = "none";
 const temperature = 0.4;
 function getGenModel(env: Env) {
@@ -298,7 +298,9 @@ export default {
 					chat_id: group.groupId,
 					text: messageTemplate(foldText(
 						fixLink(
-							processMarkdownLinks(telegramifyMarkdown(result.choices[0].message.content || "", 'keep'))))),
+							//@ts-ignore
+							// str is at `result.choices[0].message`, no `.content`, why google do this?
+							processMarkdownLinks(telegramifyMarkdown(result.choices[0].message, 'keep'))))), 
 					parse_mode: "MarkdownV2",
 				}),
 			});
