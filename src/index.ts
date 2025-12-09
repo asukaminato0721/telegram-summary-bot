@@ -115,7 +115,7 @@ type R = {
 	messageId: number;
 	timeStamp: number;
 }
-const model = "gemini-2.0-flash";
+const model = "gemini-2.5-flash";
 const reasoning_effort = "none";
 const temperature = 0.4;
 function getGenModel(env: Env) {
