@@ -238,7 +238,8 @@ export default {
 		SELECT groupId, message_count
 		FROM MessageCounts
 		WHERE message_count > 10
-		ORDER BY message_count DESC;
+		ORDER BY message_count DESC
+		LIMIT 20;
 		`).bind(Date.now()).all()).results;
 			ctx.waitUntil(
 				cache.put(cacheKey, new Response(JSON.stringify(groups), {
