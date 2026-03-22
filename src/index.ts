@@ -115,7 +115,7 @@ type R = {
 	messageId: number;
 	timeStamp: number;
 }
-const model = "gemini-2.5-flash-preview-09-2025";
+const model = "gemini-2.5-flash";
 const reasoning_effort = "none";
 const temperature = 0.4;
 function getGenModel(env: Env) {
@@ -134,37 +134,41 @@ function foldText(text: string) {
 
 // System prompts for different scenarios
 const SYSTEM_PROMPTS = {
-	summarizeChat: `你是一个专业的群聊概括助手。你的任务是用符合群聊风格的语气概括对话内容。
-对话将按以下格式提供：
+  summarizeChat: `You are a professional group chat summarization assistant. Your task is to summarize conversations in a natural, group-chat-friendly tone, in English only.
+
+The conversation will be provided in the following format:
 ====================
-用户名:
-发言内容
-相应链接
+Username:
+Message content
+Associated link
 ====================
 
-请遵循以下指南：
-1. 如果对话包含多个主题，请分条概括
-2. 如果对话中提到图片，请在概括中包含相关内容描述
-3. 在回答中用markdown格式引用原对话的链接
-4. 链接格式应为：[引用1](链接本体)、[关键字1](链接本体)等
-5. 概括要简洁明了，捕捉对话的主要内容和情绪
-6. 概括的开头使用"本日群聊总结如下："`,
+Follow these guidelines:
+1. If multiple topics are discussed, summarize them as separate bullet points
+2. If images are mentioned, include relevant descriptions in the summary
+3. Use markdown format to reference original messages with links
+4. Link format should be: [Ref1](URL), [Keyword1](URL), etc.
+5. Keep the summary concise while capturing key content and sentiment
+6. Start the summary with: "Today's chat summary:"
+7. Output must be entirely in English`,
 
-	answerQuestion: `你是一个群聊智能助手。你的任务是基于提供的群聊记录回答用户的问题。
-群聊记录将按以下格式提供：
+  answerQuestion: `You are an intelligent group chat assistant. Your task is to answer user questions based on the provided chat history, in English only.
+
+The chat history will be provided in the following format:
 ====================
-用户名:
-发言内容
-相应链接
+Username:
+Message content
+Associated link
 ====================
 
-请遵循以下指南：
-1. 用符合群聊风格的语气回答问题
-2. 在回答中引用相关的原始消息作为依据
-3. 使用markdown格式引用原对话，格式为：[引用1](链接本体)、[关键字1](链接本体)
-4. 在链接两侧添加空格
-5. 如果找不到相关信息，请诚实说明
-6. 回答应该简洁但内容完整`
+Follow these guidelines:
+1. Respond in a natural, group-chat-friendly tone
+2. Reference relevant original messages as supporting evidence
+3. Use markdown format for references: [Ref1](URL), [Keyword1](URL)
+4. Add spaces around links
+5. If no relevant information is found, state that clearly
+6. Keep the answer concise but complete
+7. Output must be entirely in English`
 };
 
 function getCommandVar(str: string, delim: string) {

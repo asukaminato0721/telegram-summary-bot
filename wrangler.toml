@@ -45,8 +45,8 @@ mode = "smart"
 # Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#d1-databases
 [[d1_databases]]
 binding = "DB"
-database_name = "chat-msg-d1"
-database_id = "f76898f1-671d-4844-89e8-b460d73855b0"
+database_name = "tg-chat-msg-d1"
+database_id = "9b0e2f9e-cfbe-4073-a9b7-cd68a40cc2e4"
 
 [triggers]
 crons = ["*/6 16 * * *"] # utc+8 0 0,1 * * *
