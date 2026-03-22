@@ -129,7 +129,7 @@ function getGenModel(env: Env) {
 }
 
 function foldText(text: string) {
-	return '**>' + text.split("\n").map((line) => '>' + line).join("\n") + '||';
+	return text.split("\n").map((line) => '>' + line).join("\n");
 }
 
 // System prompts for different scenarios
@@ -176,7 +176,7 @@ function getCommandVar(str: string, delim: string) {
 }
 
 function messageTemplate(s: string) {
-	return `Summarized by free ${escapeMarkdownV2(model)} below\n` + s + `\nThis open source project [link](https://github\\.com/asukaminato0721/telegram-summary-bot)`;
+	return `Summary by ${escapeMarkdownV2(model)}\n` + s;
 }
 /**
  * 
