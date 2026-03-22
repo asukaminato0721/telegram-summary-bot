@@ -28,7 +28,7 @@ export async function extractAllOGInfo(url: string): Promise<string> {
 			}
 		}
 		const rewriter = new HTMLRewriter().on('meta', new MetaHandler());
-		await rewriter.transform(response).text(); // 使用 await 处理 Promise
+		await rewriter.transform(response).text(); // Use await to handle Promise
 		if(ogData.size === 0) {
 			return url;
 		}
@@ -36,7 +36,7 @@ export async function extractAllOGInfo(url: string): Promise<string> {
 		for (const [key, value] of ogData.entries()) {
 			ret += `${key}: ${value}\n`;
 		}
-		return `${url} 的相关信息为:\n` + ret;
+		return `${url} related information is:\n` + ret;
 	}
 	catch (error) {
 		return url;

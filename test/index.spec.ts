@@ -5,21 +5,21 @@ import { processMarkdownLinks, toSuperscript } from "./../src/index"
 describe("test fix link", () => {
 	it("should fix link", () => {
 		const markdown = `
-		这是一个测试文本
-		[链接11111](链接11111)     // 完全相同，会被处理
-		[链接11111](链接11112221)  // 不完全相同，保持原样
-		[另一个文本](链接11112221) // 不相同，保持原样
-		[链接22222](链接22222)     // 完全相同，会被处理
-		[链接11111](链接11111)     // 完全相同，会复用编号
+		This is a test text
+		[link11111](link11111)     // identical, will be processed
+		[link11111](link11112221)  // not identical, keep as is
+		[another text](link11112221) // not same, keep as is
+		[link22222](link22222)     // identical, will be processed
+		[link11111](link11111)     // identical, will reuse number
 		`;
 		const result = processMarkdownLinks(markdown);
 		expect(result).toBe(`
-		这是一个测试文本
-		[引用¹](链接11111)     // 完全相同，会被处理
-		[链接11111](链接11112221)  // 不完全相同，保持原样
-		[另一个文本](链接11112221) // 不相同，保持原样
-		[引用²](链接22222)     // 完全相同，会被处理
-		[引用¹](链接11111)     // 完全相同，会复用编号
+		This is a test text
+		[reference¹](link11111)     // identical, will be processed
+		[link11111](link11112221)  // not identical, keep as is
+		[another text](link11112221) // not same, keep as is
+		[reference²](link22222)     // identical, will be processed
+		[reference¹](link11111)     // identical, will reuse number
 		`);
 	})
 })

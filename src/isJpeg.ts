@@ -1,16 +1,16 @@
 export function isJPEGBase64(base64String: string) {
-	// 移除可能存在的 data URI scheme 前缀
+	// Remove possible data URI scheme prefix
 	const cleanBase64 = base64String.replace(/^data:image\/jpeg;base64,/, '');
 
-	// 将 base64 解码为字节数组
+	// Decode base64 to byte array
 	const binary = atob(cleanBase64);
 	const bytes = new Uint8Array(binary.length);
 	for (let i = 0; i < binary.length; i++) {
 		bytes[i] = binary.charCodeAt(i);
 	}
 
-	// 检查 JPEG 文件头 (SOI - Start of Image)
-	// JPEG 以 FF D8 开始
+	// Check JPEG file header (SOI - Start of Image)
+	// JPEG starts with FF D8
 	if (bytes[0] !== 0xFF || bytes[1] !== 0xD8) {
 		return {
 			isValid: false,
@@ -18,8 +18,8 @@ export function isJPEGBase64(base64String: string) {
 		};
 	}
 
-	// 检查 JPEG 文件尾 (EOI - End of Image)
-	// JPEG 以 FF D9 结束
+	// Check JPEG file tail (EOI - End of Image)
+	// JPEG ends with FF D9
 	if (bytes[bytes.length - 2] !== 0xFF || bytes[bytes.length - 1] !== 0xD9) {
 		return {
 			isValid: false,

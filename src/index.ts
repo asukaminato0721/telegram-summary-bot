@@ -30,19 +30,19 @@ function getSendTime(r: R) {
 }
 
 function escapeMarkdownV2(text: string) {
-	// 注意：反斜杠 \ 本身也需要转义，所以正则表达式中是 \\\\
-	// 或者直接在字符串中使用 \
+	// Note: backslash \ itself needs to be escaped, so in regex it's \\\\
+	// Or use \ directly in the string
 	const reservedChars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
-	// 正则表达式需要转义特殊字符
+	// Regex needs to escape special characters
 	const escapedChars = reservedChars.map(char => '\\' + char).join('');
 	const regex = new RegExp(`([${escapedChars}])`, 'g');
 	return text.replace(regex, '\\$1');
 }
 
 /**
- * 将数字转换为上标数字
- * @param {number} num - 要转换的数字
- * @returns {string} 上标形式的数字
+ * Convert number to superscript number
+ * @param {number} num - The number to convert
+ * @returns {string} Number in superscript form
  */
 export function toSuperscript(num: number) {
 	const superscripts = {
@@ -65,15 +65,15 @@ export function toSuperscript(num: number) {
 		.join('');
 }
 /**
- * 处理 Markdown 文本中的重复链接，将其转换为顺序编号的格式
- * @param {string} text - 输入的 Markdown 文本
- * @param {Object} options - 配置选项
- * @param {string} options.prefix - 链接文本的前缀，默认为"链接"
- * @param {boolean} options.useEnglish - 是否使用英文(link1)而不是中文(链接1)，默认为 false
- * @returns {string} 处理后的 Markdown 文本
+ * Process duplicate links in Markdown text, converting them to sequential numbering format
+ * @param {string} text - Input Markdown text
+ * @param {Object} options - Configuration options
+ * @param {string} options.prefix - Prefix for link text, defaults to "reference"
+ * @param {boolean} options.useEnglish - Whether to use English (link1) instead of reference (reference1), defaults to false
+ * @returns {string} Processed Markdown text
  */
 export function processMarkdownLinks(text: string, options: { prefix: string, useEnglish: boolean } = {
-	prefix: '引用',
+	prefix: 'reference',
 	useEnglish: false
 }) {
 	const {
@@ -81,29 +81,29 @@ export function processMarkdownLinks(text: string, options: { prefix: string, us
 		useEnglish
 	} = options;
 
-	// 用于存储已经出现过的链接
+	// Used to store links that have already appeared
 	const linkMap = new Map();
 	let linkCounter = 1;
 
-	// 匹配 markdown 链接的正则表达式
+	// Regex to match markdown links
 	const linkPattern = /\[([^\]]+)\]\(([^)]+)\)/g;
 
 	return text.replace(linkPattern, (match, displayText, url) => {
-		// 只处理显示文本和 URL 完全相同的情况
+		// Only process cases where display text and URL are identical
 		if (displayText !== url) {
-			return match; // 保持原样
+			return match; // keep as is
 		}
 
-		// 如果这个 URL 已经出现过，使用已存在的编号
+		// If this URL has appeared before, use the existing number
 		if (!linkMap.has(url)) {
 			linkMap.set(url, linkCounter++);
 		}
 		const linkNumber = linkMap.get(url);
 
-		// 根据选项决定使用中文还是英文格式
+		// Decide whether to use Chinese or English format based on options
 		const linkPrefix = useEnglish ? 'link' : prefix;
 
-		// 返回新的格式 [链接1](原URL) 或 [link1](原URL)
+		// Return new format [reference1](originalURL) or [link1](originalURL)
 		return `[${linkPrefix}${toSuperscript(linkNumber)}](${url})`;
 	});
 }
@@ -176,7 +176,7 @@ function getCommandVar(str: string, delim: string) {
 }
 
 function messageTemplate(s: string) {
-	return `下面由免费 ${escapeMarkdownV2(model)} 概括群聊信息\n` + s + `\n本开源项目[地址](https://github\\.com/asukaminato0721/telegram-summary-bot)`;
+	return `Summarized by free ${escapeMarkdownV2(model)} below\n` + s + `\nThis open source project [link](https://github\\.com/asukaminato0721/telegram-summary-bot)`;
 }
 /**
  * 
@@ -327,7 +327,7 @@ export default {
 	fetch: async (request: Request, env: Env, ctx: ExecutionContext) => {
 		await new TelegramBot(env.SECRET_TELEGRAM_API_TOKEN)
 			.on('status', async (ctx) => {
-				const res = (await ctx.reply('我家还蛮大的'))!;
+				const res = (await ctx.reply('My house is quite big'))!;
 				if (!res.ok) {
 					console.error(`Error sending message:`, res);
 				}
@@ -337,7 +337,7 @@ export default {
 				const groupId = ctx.update.message!.chat.id;
 				const messageText = ctx.update.message!.text || "";
 				if (!messageText.split(" ")[1]) {
-					const res = (await ctx.reply('请输入要查询的关键词'))!;
+					const res = (await ctx.reply('Please enter the keyword to search'))!;
 					if (!res.ok) {
 						console.error(`Error sending message:`, res);
 					}
@@ -351,7 +351,7 @@ export default {
 					.bind(groupId, `*${messageText.split(" ")[1]}*`)
 					.all();
 				const res = (await ctx.reply(
-					escapeMarkdownV2(`查询结果:
+					escapeMarkdownV2(`Search results:
 ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "" : `[link](https://t.me/c/${parseInt(r.groupId.slice(2))}/${r.messageId})`}`).join('\n')}`), "MarkdownV2"))!;
 				if (!res.ok) {
 					console.error(`Error sending message:`, res.status, res.statusText, await res.text());
@@ -363,7 +363,7 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				const userId = ctx.update.message!.from!.id;
 				const messageText = ctx.update.message!.text || "";
 				if (!messageText.split(" ")[1]) {
-					const res = (await ctx.reply('请输入要问的问题'))!;
+					const res = (await ctx.reply('Please enter the question to ask'))!;
 					if (!res.ok) {
 						console.error(`Error sending message:`, res);
 					}
@@ -372,11 +372,11 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				let res = await ctx.api.sendMessage(ctx.bot.api.toString(), {
 					"chat_id": userId,
 					"parse_mode": "MarkdownV2",
-					"text": "bot 已经收到你的问题, 请稍等",
+					"text": "Bot has received your question, please wait",
 					reply_to_message_id: -1,
 				});
 				if (!res.ok) {
-					await ctx.reply(`请开启和 bot 的私聊, 不然无法接收消息`);
+					await ctx.reply(`Please start a private chat with the bot, otherwise unable to receive messages`);
 					return new Response('ok');
 				}
 				const { results } = await env.DB.prepare(`
@@ -414,7 +414,7 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 								},
 								{
 									"role": "user",
-									content: `问题：${getCommandVar(messageText, " ")}`
+									content: `Question: ${getCommandVar(messageText, " ")}`
 								}
 							],
 							max_tokens: 4096,
@@ -436,17 +436,17 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				if (!res.ok) {
 					let reason = (await res.json() as any)?.promptFeedback?.blockReason;
 					if (reason) {
-						await ctx.reply(`无法回答, 理由 ${reason}`);
+						await ctx.reply(`Unable to answer, reason ${reason}`);
 						return new Response('ok');
 					}
-					await ctx.reply(`发送失败`);
+					await ctx.reply(`Send failed`);
 				}
 				return new Response('ok');
 			})
 			.on("summary", async (bot) => {
 				const groupId = bot.update.message!.chat.id;
 				if (bot.update.message!.text!.split(" ").length === 1) {
-					await bot.reply('请输入要查询的时间范围/消息数量, 如 /summary 114h 或 /summary 514');
+					await bot.reply('Please enter the time range/number of messages to query, e.g. /summary 114h or /summary 514');
 					return new Response('ok');
 				}
 				const summary = bot.update.message!.text!.split(" ")[1];
@@ -464,7 +464,7 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 					}
 				}
 				catch (e: any) {
-					await bot.reply('请输入要查询的时间范围/消息数量, 如 /summary 114h 或 /summary 514  ' + e.message);
+					await bot.reply('Please enter the time range/number of messages to query, e.g. /summary 114h or /summary 514  ' + e.message);
 					return new Response('ok');
 				}
 				if (summary.endsWith("h")) {
@@ -548,10 +548,10 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 						const fwd = msg.forward_from?.last_name;
 						const replyTo = msg.reply_to_message?.message_id;
 						if (fwd) {
-							content = `转发自 ${fwd}: ${content}`;
+							content = `Forwarded from ${fwd}: ${content}`;
 						}
 						if (replyTo) {
-							content = `回复 ${getMessageLink({ groupId: groupId.toString(), messageId: replyTo })}: ${content}`;
+							content = `Reply to ${getMessageLink({ groupId: groupId.toString(), messageId: replyTo })}: ${content}`;
 						}
 						if (content.startsWith("http") && !content.includes(" ")) {
 							content = await extractAllOGInfo(content);
