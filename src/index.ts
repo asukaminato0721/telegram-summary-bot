@@ -26,7 +26,7 @@ function getMessageLink(r: { groupId: string, messageId: number }) {
 }
 
 function getSendTime(r: R) {
-	return new Date(r.timeStamp).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
+	return new Date(r.timeStamp).toLocaleString("en-US", { timeZone: "US/Eastern" });
 }
 
 function escapeMarkdownV2(text: string) {
@@ -200,7 +200,7 @@ export default {
 		ctx: ExecutionContext,
 	) {
 		console.debug("Scheduled task starting:", new Date().toISOString());
-		const date = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Shanghai" }));
+		const date = new Date(new Date().toLocaleString("en-US", { timeZone: "US/Eastern" }));
 		// Clean up oldest 4000 messages
 		if (date.getHours() === 0 && date.getMinutes() < 5) {
 			await env.DB.prepare(`
