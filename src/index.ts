@@ -334,7 +334,17 @@ export default {
 				return new Response('ok');
 			})
 			.on("query", async (ctx) => {
-				const groupId = ctx.update.message!.chat.id;
+			const groupId = ctx.update.message!.chat.id; // numeric ID
+				// Check whitelist
+				const { results: whitelistResults } = await env.DB.prepare(`
+					SELECT groupId FROM WhitelistedGroups WHERE CAST(groupId AS INTEGER) = ?
+				`).bind(groupId).all();
+
+				if (!whitelistResults || whitelistResults.length === 0) {
+					await ctx.reply('This group is not whitelisted. Please contact the bot owner.');
+					return new Response('ok');
+				}
+
 				const messageText = ctx.update.message!.text || "";
 				if (!messageText.split(" ")[1]) {
 					const res = (await ctx.reply('Please enter the keyword to search'))!;
@@ -359,8 +369,18 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				return new Response('ok');
 			})
 			.on("ask", async (ctx) => {
-				const groupId = ctx.update.message!.chat.id;
-				const userId = ctx.update.message!.from!.id;
+			const groupId = ctx.update.message!.chat.id; // numeric ID
+				
+				// Check whitelist
+				const { results: whitelistResults } = await env.DB.prepare(`
+					SELECT groupId FROM WhitelistedGroups WHERE CAST(groupId AS INTEGER) = ?
+				`).bind(groupId).all();
+
+				if (!whitelistResults || whitelistResults.length === 0) {
+					await ctx.reply('This group is not whitelisted. Please contact the bot owner.');
+					return new Response('ok');
+				}
+
 				const messageText = ctx.update.message!.text || "";
 				if (!messageText.split(" ")[1]) {
 					const res = (await ctx.reply('Please enter the question to ask'))!;
@@ -444,7 +464,19 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				return new Response('ok');
 			})
 			.on("summary", async (bot) => {
-				const groupId = bot.update.message!.chat.id;
+			const groupId = bot.update.message!.chat.id; // numeric ID
+				// Check whitelist
+				const { results: whitelistResults } = await env.DB.prepare(`
+					SELECT groupId FROM WhitelistedGroups WHERE CAST(groupId AS INTEGER) = ?
+				`).bind(groupId).all();
+
+				console.debug(`Summary check - groupId: ${groupId}, whitelistResults:`, whitelistResults);
+
+				if (!whitelistResults || whitelistResults.length === 0) {
+					await bot.reply('This group is not whitelisted. Please contact the bot owner.');
+					return new Response('ok');
+				}
+
 				if (bot.update.message!.text!.split(" ").length === 1) {
 					await bot.reply('Please enter the time range/number of messages to query, e.g. /summary 114h or /summary 514');
 					return new Response('ok');
@@ -534,9 +566,80 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 
 				return new Response('ok');
 			})
+			.on('my_chat_member', async (ctx) => {
+				// Triggered when bot is added/removed from a group
+				const my_chat_member = ctx.update.my_chat_member!;
+				const groupId = my_chat_member.chat.id;
+				const groupName = my_chat_member.chat.title || 'Unknown';
+				const newStatus = my_chat_member.new_chat_member.status;
+
+				// If bot was just added to the group
+				if ((my_chat_member.old_chat_member.status === 'left' || my_chat_member.old_chat_member.status === 'kicked') && 
+				    (newStatus === 'member' || newStatus === 'administrator')) {
+					// Send message to owner asking for whitelist
+					const ownerUserId = env.OWNER_ID;
+					await ctx.api.sendMessage(ownerUserId, 
+						`Bot added to new group: <b>${escapeMarkdownV2(groupName)}</b> (ID: <code>${groupId}</code>)\n\nUse /whitelist ${groupId} to approve this group for processing.`,
+						{ parse_mode: 'HTML' }
+					);
+				}
+				return new Response('ok');
+			})
+			.on('whitelist', async (ctx) => {
+				const ownerUserId = parseInt(env.OWNER_ID);
+				const userId = ctx.update.message!.from!.id;
+
+				// Only owner can use this command
+				if (userId !== ownerUserId) {
+					await ctx.reply('You are not authorized to use this command.');
+					return new Response('ok');
+				}
+
+				const messageText = ctx.update.message!.text || '';
+				const groupIdStr = messageText.split(' ')[1];
+
+				if (!groupIdStr) {
+					await ctx.reply('Usage: /whitelist <groupId>');
+					return new Response('ok');
+				}
+
+				const groupId = groupIdStr;
+				try {
+				// Add to whitelist (ensure numeric ID)
+				const numericGroupId = parseInt(groupId);
+				if (isNaN(numericGroupId)) {
+					await ctx.reply('Invalid group ID. Must be a number.');
+					return new Response('ok');
+				}
+
+				await env.DB.prepare(`
+					INSERT OR REPLACE INTO WhitelistedGroups(groupId, groupName, whitelistedAt)
+					VALUES (CAST(? AS INTEGER), ?, ?)
+				`).bind(numericGroupId, `Group ${numericGroupId}`, Date.now()).run();
+
+				await ctx.reply(`Group ${numericGroupId} has been whitelisted!`);
+				} catch (e) {
+					console.error('Whitelist error:', e);
+					await ctx.reply('Error whitelisting group. Make sure the group ID is correct.');
+				}
+				return new Response('ok');
+			})
 			.on(':message', async (bot) => {
 				if (!bot.update.message!.chat.type.includes('group')) {
 					await bot.reply('I am a bot, please add me to a group to use me.');
+					return new Response('ok');
+				}
+
+			const groupId = bot.update.message!.chat.id; // numeric ID
+
+			// Check if group is whitelisted
+			const { results: whitelistResults } = await env.DB.prepare(`
+				SELECT groupId FROM WhitelistedGroups WHERE CAST(groupId AS INTEGER) = ?
+			`).bind(groupId).all();
+
+				if (!whitelistResults || whitelistResults.length === 0) {
+					// Group not whitelisted, ignore message
+					console.debug(`Message from non-whitelisted group: ${groupId}`);
 					return new Response('ok');
 				}
 

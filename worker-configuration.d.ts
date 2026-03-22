@@ -5,4 +5,5 @@ interface Env {
 	GEMINI_API_KEY: string;
 	account_id: string;
 	DB: D1Database;
+	OWNER_ID: string;
 }

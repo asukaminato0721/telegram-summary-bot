@@ -9,3 +9,9 @@ CREATE TABLE IF NOT EXISTS Messages (
 );
 CREATE INDEX IF NOT EXISTS idx_messages_groupid_timestamp
 			ON Messages(groupId, timeStamp DESC);
+
+CREATE TABLE IF NOT EXISTS WhitelistedGroups (
+	groupId TEXT PRIMARY KEY,
+	groupName TEXT,
+	whitelistedAt INTEGER NOT NULL
+);
