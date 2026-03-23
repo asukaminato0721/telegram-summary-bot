@@ -169,7 +169,7 @@ Follow these guidelines:
 3. Use markdown format to reference original messages with links
 4. Link format should be: [Ref1](URL), [Keyword1](URL), etc.
 5. Keep the summary concise while capturing key content and sentiment
-6. Start the summary with: "Today's chat summary:"
+6. Start the summary with the time frame and message count information provided
 7. Output must be entirely in English`,
 
   answerQuestion: `You are an intelligent group chat assistant. Your task is to answer user questions based on the provided chat history, in English only.
@@ -553,6 +553,16 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				}
 				if (results.length > 0) {
 					try {
+						// Determine the summary type and format the header
+						let summaryHeader = "";
+						if (summary.endsWith("h")) {
+							const hours = parseInt(summary);
+							summaryHeader = `Chat summary for the last ${hours} hour${hours === 1 ? '' : 's'} (${results.length} messages):`;
+						} else {
+							const messageCount = Math.min(parseInt(summary), 4000);
+							summaryHeader = `Chat summary of the last ${results.length} messages:`;
+						}
+
 						const result = await getGenModel(env).chat.completions.create(
 							{
 								model,
@@ -564,14 +574,17 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 									},
 									{
 										"role": "user",
-										content: results.flatMap(
-											(r: any) => [
-												dispatchContent(`====================`),
-												dispatchContent(`${r.userName}:`),
-												dispatchContent(r.content),
-												dispatchContent(getMessageLink(r)),
-											]
-										)
+										content: [
+											dispatchContent(`Please summarize this chat history. ${summaryHeader}`),
+											...results.flatMap(
+												(r: any) => [
+													dispatchContent(`====================`),
+													dispatchContent(`${r.userName}:`),
+													dispatchContent(r.content),
+													dispatchContent(getMessageLink(r)),
+												]
+											)
+										]
 									}
 								],
 								max_tokens: 4096,
