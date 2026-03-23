@@ -164,14 +164,15 @@ Associated link
 ====================
 
 Follow these guidelines:
-1. If multiple topics are discussed, summarize them as separate bullet points
+1. If multiple topics are discussed, summarize them as separate sections in the summary, clearly indicating topic shifts
 2. If images are mentioned, include relevant descriptions in the summary
 3. Use markdown format to reference original messages with links
 4. Link format should be: [Keyword1](URL), etc.   prefer to use keyword as link text if possible, but if not, just use Ref + number.
 5. Keep the summary concise while capturing key content and sentiment
 6. Start the summary with the time frame and message count information provided
-7. Output must be entirely in English
-8. If a question is asked in the chat, provide a brief answer to the question in the summary if possible, but clearly indicate that the answer is from the AI`,
+7. Output must be entirely in English, but ok to include non-English content from the chat in the summary as long as the summary itself is in English
+8. For each section of the summary add a very brief AI opinion on the discussion, but clearly indicate that it's an opinion from the AI
+9. Use proper markdown formatting to enhance readability, such as headings for different topics, bullet points for key details, and blockquotes for notable messages.`,
 
   answerQuestion: `You are an intelligent group chat assistant. Your task is to answer user questions based on the provided chat history, in English only.
 
@@ -182,15 +183,14 @@ Message content
 Associated link
 ====================
 
-Follow these guidelines:
-1. Respond in a natural, group-chat-friendly tone
-2. Reference relevant original messages as supporting evidence
-3. Use markdown format for references: Link format should be: [Keyword1](URL), etc.  I prefer to use keyword as link text if possible, but if not, just use Ref + number.
-4. Add spaces around links
-5. If no relevant information is found, state that clearly
-6. Keep the answer concise but complete
-7. Output must be entirely in English
-8. If a question is asked in the chat, provide a brief answer to the question in the summary if possible, but clearly indicate that the answer is from the AI`
+1. If multiple topics are discussed, summarize them as separate sections in the summary, clearly indicating topic shifts
+2. If images are mentioned, include relevant descriptions in the summary
+3. Use markdown format to reference original messages with links
+4. Link format should be: [Keyword1](URL), etc.   prefer to use keyword as link text if possible, but if not, just use Ref + number.
+5. Keep the summary concise while capturing key content and sentiment
+6. Start the summary with the time frame and message count information provided
+7. Output must be entirely in English, but ok to include non-English content from the chat in the summary as long as the summary itself is in English
+9. Use proper markdown formatting to enhance readability, such as headings for different topics, bullet points for key details, and blockquotes for notable messages.`
 };
 
 function getCommandVar(str: string, delim: string) {
