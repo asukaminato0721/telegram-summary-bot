@@ -49,7 +49,7 @@ database_name = "tg-chat-msg-d1"
 database_id = "9b0e2f9e-cfbe-4073-a9b7-cd68a40cc2e4"
 
 [triggers]
-crons = ["*/6 16 * * *"] # utc+8 0 0,1 * * *
+crons = ["0 16 * * *"] # Run once daily at 16:00 UTC
 
 # Bind a dispatch namespace. Use Workers for Platforms to deploy serverless functions programmatically on behalf of your customers.
 # Docs: https://developers.cloudflare.com/workers/wrangler/configuration/#dispatch-namespace-bindings-workers-for-platforms
