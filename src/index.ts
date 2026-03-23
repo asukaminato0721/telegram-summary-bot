@@ -6,6 +6,9 @@ import telegramifyMarkdown from "telegramify-markdown"
 import { Buffer } from 'node:buffer';
 import { isJPEGBase64 } from './isJpeg';
 import { extractAllOGInfo } from "./og"
+
+// Global set to track groups we've already notified the owner about (resets on deployment)
+const notifiedGroups = new Set<number>();
 function dispatchContent(content: string): { type: "text", text: string } | { type: "image_url", image_url: { url: string } } {
 	if (content.startsWith("data:image/jpeg;base64,")) {
 		return ({
@@ -130,6 +133,24 @@ function getGenModel(env: Env) {
 
 function foldText(text: string) {
 	return text.split("\n").map((line) => '>' + line).join("\n");
+}
+
+// Notify owner about non-whitelisted group (only once per deployment)
+async function notifyOwnerAboutGroup(bot: TelegramApi, env: Env, groupId: number, groupName: string) {
+	if (notifiedGroups.has(groupId)) {
+		return; // Already notified
+	}
+
+	try {
+		const ownerUserId = parseInt(env.OWNER_ID);
+		await bot.sendMessage(ownerUserId, 
+			`Bot received message from non-whitelisted group: ${groupName} (ID: ${groupId})\n\nUse /whitelist ${groupId} to approve this group for processing.`
+		);
+		notifiedGroups.add(groupId);
+		console.debug(`Owner notified about group ${groupId}`);
+	} catch (e) {
+		console.error('Failed to notify owner about non-whitelisted group:', e);
+	}
 }
 
 // System prompts for different scenarios
@@ -341,7 +362,10 @@ export default {
 				`).bind(groupId).all();
 
 				if (!whitelistResults || whitelistResults.length === 0) {
-					await ctx.reply('This group is not whitelisted. Please contact the bot owner.');
+					await ctx.reply(`This group (ID: ${groupId}) is not whitelisted. Please contact the bot owner.`);
+					// Notify owner about this non-whitelisted group
+					const groupName = ctx.update.message!.chat.title || 'Unknown';
+					await notifyOwnerAboutGroup(ctx.api, env, groupId, groupName);
 					return new Response('ok');
 				}
 
@@ -377,7 +401,9 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				`).bind(groupId).all();
 
 				if (!whitelistResults || whitelistResults.length === 0) {
-					await ctx.reply('This group is not whitelisted. Please contact the bot owner.');
+				await ctx.reply(`This group (ID: ${groupId}) is not whitelisted. Please contact the bot owner.`);
+					const groupName = ctx.update.message!.chat.title || 'Unknown';
+					await notifyOwnerAboutGroup(ctx.api, env, groupId, groupName);
 					return new Response('ok');
 				}
 
@@ -473,7 +499,10 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				console.debug(`Summary check - groupId: ${groupId}, whitelistResults:`, whitelistResults);
 
 				if (!whitelistResults || whitelistResults.length === 0) {
-					await bot.reply('This group is not whitelisted. Please contact the bot owner.');
+					await bot.reply(`This group (ID: ${groupId}) is not whitelisted. Please contact the bot owner.`);
+					// Notify owner about this non-whitelisted group
+					const groupName = bot.update.message!.chat.title || 'Unknown';
+					await notifyOwnerAboutGroup(bot.api, env, groupId, groupName);
 					return new Response('ok');
 				}
 
@@ -567,21 +596,29 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				return new Response('ok');
 			})
 			.on('my_chat_member', async (ctx) => {
+				console.debug('my_chat_member event triggered:', ctx.update.my_chat_member);
 				// Triggered when bot is added/removed from a group
 				const my_chat_member = ctx.update.my_chat_member!;
 				const groupId = my_chat_member.chat.id;
 				const groupName = my_chat_member.chat.title || 'Unknown';
 				const newStatus = my_chat_member.new_chat_member.status;
 
+				console.debug(`Bot status change: ${my_chat_member.old_chat_member.status} -> ${newStatus} in group ${groupId} (${groupName})`);
+
 				// If bot was just added to the group
 				if ((my_chat_member.old_chat_member.status === 'left' || my_chat_member.old_chat_member.status === 'kicked') && 
 				    (newStatus === 'member' || newStatus === 'administrator')) {
 					// Send message to owner asking for whitelist
-					const ownerUserId = env.OWNER_ID;
-					await ctx.api.sendMessage(ownerUserId, 
-						`Bot added to new group: <b>${escapeMarkdownV2(groupName)}</b> (ID: <code>${groupId}</code>)\n\nUse /whitelist ${groupId} to approve this group for processing.`,
-						{ parse_mode: 'HTML' }
-					);
+					const ownerUserId = parseInt(env.OWNER_ID);
+					console.debug(`Attempting to notify owner ${ownerUserId} about group ${groupId}`);
+					try {
+						await ctx.api.sendMessage(ownerUserId, 
+							`Bot added to new group: ${groupName} (ID: ${groupId})\n\nUse /whitelist ${groupId} to approve this group for processing.`
+						);
+						console.debug('Owner notification sent successfully');
+					} catch (e) {
+						console.error('Failed to notify owner:', e);
+					}
 				}
 				return new Response('ok');
 			})
@@ -598,13 +635,22 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				const messageText = ctx.update.message!.text || '';
 				const groupIdStr = messageText.split(' ')[1];
 
-				if (!groupIdStr) {
-					await ctx.reply('Usage: /whitelist <groupId>');
-					return new Response('ok');
+let chosenGroupId = groupIdStr;
+			if (!chosenGroupId) {
+				// If command is run inside a group (owner can do this), use that group id
+				const chat = ctx.update.message?.chat;
+				if (chat && chat.id && chat.type && chat.type.includes('group')) {
+					chosenGroupId = String(chat.id);
 				}
+			}
 
-				const groupId = groupIdStr;
-				try {
+			if (!chosenGroupId) {
+				await ctx.reply('Usage: /whitelist <groupId>');
+				return new Response('ok');
+			}
+
+			const groupId = chosenGroupId;
+			try {
 				// Add to whitelist (ensure numeric ID)
 				const numericGroupId = parseInt(groupId);
 				if (isNaN(numericGroupId)) {
@@ -638,8 +684,14 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 			`).bind(groupId).all();
 
 				if (!whitelistResults || whitelistResults.length === 0) {
-					// Group not whitelisted, ignore message
+					// Group not whitelisted, ignore message but notify owner
 					console.debug(`Message from non-whitelisted group: ${groupId}`);
+					const groupName = bot.update.message!.chat.title || 'Unknown';
+					const messageText = bot.update.message!.text || '';
+					// Only notify for non-command messages to avoid spam
+					if (messageText && !messageText.startsWith('/')) {
+						await notifyOwnerAboutGroup(bot.api, env, groupId, groupName);
+					}
 					return new Response('ok');
 				}
 
@@ -721,6 +773,18 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 			.on(":edited_message", async (ctx) => {
 				const msg = ctx.update.edited_message!;
 				const groupId = msg.chat.id;
+				
+				// Check if group is whitelisted
+				const { results: whitelistResults } = await env.DB.prepare(`
+					SELECT groupId FROM WhitelistedGroups WHERE CAST(groupId AS INTEGER) = ?
+				`).bind(groupId).all();
+
+				if (!whitelistResults || whitelistResults.length === 0) {
+					// Group not whitelisted, ignore edited message
+					console.debug(`Edited message from non-whitelisted group: ${groupId}`);
+					return new Response('ok');
+				}
+				
 				const content = msg.text || "";
 				const messageId = msg.message_id;
 				const groupName = msg.chat.title || "anonymous";
