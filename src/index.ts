@@ -167,10 +167,11 @@ Follow these guidelines:
 1. If multiple topics are discussed, summarize them as separate bullet points
 2. If images are mentioned, include relevant descriptions in the summary
 3. Use markdown format to reference original messages with links
-4. Link format should be: [Ref1](URL), [Keyword1](URL), etc.
+4. Link format should be: [Keyword1](URL), etc.   prefer to use keyword as link text if possible, but if not, just use Ref + number.
 5. Keep the summary concise while capturing key content and sentiment
 6. Start the summary with the time frame and message count information provided
-7. Output must be entirely in English`,
+7. Output must be entirely in English
+8. If a question is asked in the chat, provide a brief answer to the question in the summary if possible, but clearly indicate that the answer is from the AI`,
 
   answerQuestion: `You are an intelligent group chat assistant. Your task is to answer user questions based on the provided chat history, in English only.
 
@@ -184,11 +185,12 @@ Associated link
 Follow these guidelines:
 1. Respond in a natural, group-chat-friendly tone
 2. Reference relevant original messages as supporting evidence
-3. Use markdown format for references: [Ref1](URL), [Keyword1](URL)
+3. Use markdown format for references: Link format should be: [Keyword1](URL), etc.  I prefer to use keyword as link text if possible, but if not, just use Ref + number.
 4. Add spaces around links
 5. If no relevant information is found, state that clearly
 6. Keep the answer concise but complete
-7. Output must be entirely in English`
+7. Output must be entirely in English
+8. If a question is asked in the chat, provide a brief answer to the question in the summary if possible, but clearly indicate that the answer is from the AI`
 };
 
 function getCommandVar(str: string, delim: string) {
@@ -553,14 +555,17 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				}
 				if (results.length > 0) {
 					try {
+						// Calculate actual time frame from messages
+						const firstMessageTime = getSendTime(results[0] as R);
+						const lastMessageTime = getSendTime(results[results.length - 1] as R);
+
 						// Determine the summary type and format the header
 						let summaryHeader = "";
 						if (summary.endsWith("h")) {
 							const hours = parseInt(summary);
-							summaryHeader = `Chat summary for the last ${hours} hour${hours === 1 ? '' : 's'} (${results.length} messages):`;
+							summaryHeader = `Chat summary for the last ${hours} hour${hours === 1 ? '' : 's'}\nTime frame: ${firstMessageTime} to ${lastMessageTime}\nMessage count: ${results.length}`;
 						} else {
-							const messageCount = Math.min(parseInt(summary), 4000);
-							summaryHeader = `Chat summary of the last ${results.length} messages:`;
+							summaryHeader = `Chat summary of the last ${results.length} messages\nTime frame: ${firstMessageTime} to ${lastMessageTime}`;
 						}
 
 						const result = await getGenModel(env).chat.completions.create(
@@ -575,7 +580,7 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 									{
 										"role": "user",
 										content: [
-											dispatchContent(`Please summarize this chat history. ${summaryHeader}`),
+											dispatchContent(`Please summarize this chat history.\n${summaryHeader}`),
 											...results.flatMap(
 												(r: any) => [
 													dispatchContent(`====================`),
