@@ -118,7 +118,7 @@ type R = {
 	messageId: number;
 	timeStamp: number;
 }
-const model = "gpt-4o-mini";
+const model = "gpt-5.4-nano";
 const reasoning_effort = "none";
 const temperature = 0.4;
 function getGenModel(env: Env) {
@@ -306,7 +306,7 @@ export default {
 							]
 						)
 					}],
-				max_tokens: 4096,
+				max_completion_tokens: 4096,
 				temperature
 			})
 			if ([-1001687785734].includes(parseInt(group.groupId as string))) {
@@ -464,7 +464,7 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 									content: `Question: ${getCommandVar(messageText, " ")}`
 								}
 							],
-							max_tokens: 4096,
+							max_completion_tokens: 4096,
 							temperature
 						});
 				} catch (e) {
@@ -592,10 +592,9 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 										]
 									}
 								],
-								max_tokens: 4096,
-								temperature
-							})
-
+							max_completion_tokens: 4096,
+							temperature
+						})
 
 						let res = await bot.reply(
 							messageTemplate(foldText(
