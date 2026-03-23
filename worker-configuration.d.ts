@@ -2,7 +2,7 @@
 
 interface Env {
 	SECRET_TELEGRAM_API_TOKEN: string;
-	GEMINI_API_KEY: string;
+	OPENAI_API_KEY: string;
 	account_id: string;
 	DB: D1Database;
 	OWNER_ID: string;

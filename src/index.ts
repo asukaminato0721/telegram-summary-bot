@@ -118,13 +118,12 @@ type R = {
 	messageId: number;
 	timeStamp: number;
 }
-const model = "gemini-2.5-flash";
+const model = "gpt-4o-mini";
 const reasoning_effort = "none";
 const temperature = 0.4;
 function getGenModel(env: Env) {
 	const openai = new OpenAI({
-		apiKey: env.GEMINI_API_KEY,
-		baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+		apiKey: env.OPENAI_API_KEY,
 		timeout: 999999999999,
 	});
 	const account_id = env.account_id;
