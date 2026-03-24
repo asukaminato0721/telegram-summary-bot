@@ -172,7 +172,8 @@ Follow these guidelines:
 6. Start the summary with the time frame and message count information provided
 7. Output must be entirely in English, but ok to include non-English content from the chat in the summary as long as the summary itself is in English
 8. For each section of the summary add a very brief AI opinion on the discussion, but clearly indicate that it's an opinion from the AI
-9. Use proper markdown formatting to enhance readability, such as headings for different topics, bullet points for key details, and blockquotes for notable messages.`,
+9. Use proper markdown formatting to enhance readability, such as headings for different topics, bullet points for key details, and blockquotes for notable messages.
+10. Keep the total response within 256 words, and try to be as concise as possible while following the above guidelines.`,
 
   answerQuestion: `You are an intelligent group chat assistant. Your task is to answer user questions based on the provided chat history, in English only.
 
@@ -190,7 +191,8 @@ Associated link
 5. Keep the summary concise while capturing key content and sentiment
 6. Start the summary with the time frame and message count information provided
 7. Output must be entirely in English, but ok to include non-English content from the chat in the summary as long as the summary itself is in English
-9. Use proper markdown formatting to enhance readability, such as headings for different topics, bullet points for key details, and blockquotes for notable messages.`
+9. Use proper markdown formatting to enhance readability, such as headings for different topics, bullet points for key details, and blockquotes for notable messages.
+10. Keep the total response within 256 words, and try to be as concise as possible while following the above guidelines.`
 };
 
 function getCommandVar(str: string, delim: string) {
@@ -200,6 +202,48 @@ function getCommandVar(str: string, delim: string) {
 function messageTemplate(s: string) {
 	return `Summary by ${escapeMarkdownV2(model)}\n` + s;
 }
+
+function splitTelegramMessage(text: string, maxLen = 3900) {
+	const chunks: string[] = [];
+	let remaining = text;
+	while (remaining.length > maxLen) {
+		let splitIndex = remaining.lastIndexOf('\n', maxLen);
+		if (splitIndex <= 0) {
+			splitIndex = maxLen;
+		}
+		chunks.push(remaining.slice(0, splitIndex));
+		remaining = remaining.slice(splitIndex);
+	}
+	if (remaining.length > 0) {
+		chunks.push(remaining);
+	}
+	return chunks;
+}
+
+async function sendSummaryText(bot: any, text: string) {
+	const chunks = splitTelegramMessage(text, 3900);
+	for (const chunk of chunks) {
+		const res = await bot.reply(chunk, 'MarkdownV2');
+		if (!res?.ok) {
+			const body = await res.json().catch(() => null);
+			const description = body?.description || '';
+			if (description.includes("can't parse entities") || description.includes('message is too long')) {
+				// Fallback to plain text, as MarkdownV2 may fail due to `/` escaping or length.
+				const plainChunks = splitTelegramMessage(text, 3900);
+				for (const plainChunk of plainChunks) {
+					const fallbackRes = await bot.reply(plainChunk);
+					if (!fallbackRes?.ok) {
+						console.error('Fallback plain text reply failed', await fallbackRes?.text());
+					}
+				}
+				return;
+			}
+			console.error('Failed to send reply', res?.statusText, await res?.text());
+			return;
+		}
+	}
+}
+
 /**
  * 
  * @param text 
@@ -503,13 +547,10 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 							temperature
 						})
 
-						let res = await bot.reply(
-							messageTemplate(foldText(
-								fixLink(
-									processMarkdownLinks(telegramifyMarkdown(result.choices[0].message.content || "", 'keep'))))), 'MarkdownV2');
-						if (!res?.ok) {
-							console.error("Failed to send reply", res?.statusText, await res?.text());
-						}
+						const summaryText = messageTemplate(foldText(
+							fixLink(
+								processMarkdownLinks(telegramifyMarkdown(result.choices[0].message.content || "", 'keep')))));
+						await sendSummaryText(bot, summaryText);
 					}
 					catch (e) {
 						console.error(e);
