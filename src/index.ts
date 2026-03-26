@@ -33,13 +33,13 @@ function getSendTime(r: R) {
 }
 
 function escapeMarkdownV2(text: string) {
-	// Note: backslash \ itself needs to be escaped, so in regex it's \\\\
-	// Or use \ directly in the string
+	// Escape backslash first to avoid double-interpreting existing escapes.
+	const withEscapedBackslashes = text.replace(/\\/g, "\\\\");
 	const reservedChars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!'];
 	// Regex needs to escape special characters
 	const escapedChars = reservedChars.map(char => '\\' + char).join('');
 	const regex = new RegExp(`([${escapedChars}])`, 'g');
-	return text.replace(regex, '\\$1');
+	return withEscapedBackslashes.replace(regex, '\\$1');
 }
 
 /**
@@ -172,8 +172,15 @@ Follow these guidelines:
 6. Start the summary with the time frame and message count information provided
 7. Output must be entirely in English, but ok to include non-English content from the chat in the summary as long as the summary itself is in English
 8. For each section of the summary add a very brief AI opinion on the discussion, but clearly indicate that it's an opinion from the AI
-9. Use proper markdown formatting to enhance readability, such as headings for different topics, bullet points for key details, and blockquotes for notable messages.
-10. Keep the total response within 256 words, and try to be as concise as possible while following the above guidelines.`,
+9. Use proper markdown formatting to enhance readability, but avoid nested bullet lists and avoid blockquotes.
+10. Keep the total response within 256 words, and try to be as concise as possible while following the above guidelines.
+11. Use this structure for readability:
+    - First line: one compact time/message-count line.
+    - Then sections titled exactly like: "Topic 1: ...", "Topic 2: ..."
+    - For each topic, use normal paragraph flow with short paragraphs and inline links.
+    - Put only the single "AI opinion:" line in a fenced code block (\`\`\` ... \`\`\`).
+    - Do not separate links into their own bullet list; flow them naturally with the relevant sentence.
+12. Keep lines natural sentence flow; do not break every sentence into a new line.`,
 
   answerQuestion: `You are an intelligent group chat assistant. Your task is to answer user questions based on the provided chat history, in English only.
 
@@ -191,8 +198,9 @@ Associated link
 5. Keep the summary concise while capturing key content and sentiment
 6. Start the summary with the time frame and message count information provided
 7. Output must be entirely in English, but ok to include non-English content from the chat in the summary as long as the summary itself is in English
-9. Use proper markdown formatting to enhance readability, such as headings for different topics, bullet points for key details, and blockquotes for notable messages.
-10. Keep the total response within 256 words, and try to be as concise as possible while following the above guidelines.`
+9. Use proper markdown formatting to enhance readability, but avoid nested bullet lists and avoid blockquotes.
+10. Keep the total response within 256 words, and try to be as concise as possible while following the above guidelines.
+11. Prefer compact paragraphs over list-heavy formatting unless the user explicitly asks for bullets.`
 };
 
 function getCommandVar(str: string, delim: string) {
@@ -220,7 +228,7 @@ function splitTelegramMessage(text: string, maxLen = 3900) {
 	return chunks;
 }
 
-async function sendSummaryText(bot: any, text: string) {
+async function sendSummaryText(bot: any, text: string, fallbackRawText?: string) {
 	const chunks = splitTelegramMessage(text, 3900);
 	for (const chunk of chunks) {
 		const res = await bot.reply(chunk, 'MarkdownV2');
@@ -228,12 +236,13 @@ async function sendSummaryText(bot: any, text: string) {
 			const body = await res.json().catch(() => null);
 			const description = body?.description || '';
 			if (description.includes("can't parse entities") || description.includes('message is too long')) {
-				// Fallback to plain text, as MarkdownV2 may fail due to `/` escaping or length.
-				const plainChunks = splitTelegramMessage(text, 3900);
-				for (const plainChunk of plainChunks) {
-					const fallbackRes = await bot.reply(plainChunk);
+				// Fallback to fully escaped MarkdownV2 text to keep output readable and stable.
+				const safeText = escapeMarkdownV2(fallbackRawText ?? text);
+				const safeChunks = splitTelegramMessage(safeText, 3900);
+				for (const safeChunk of safeChunks) {
+					const fallbackRes = await bot.reply(safeChunk, 'MarkdownV2');
 					if (!fallbackRes?.ok) {
-						console.error('Fallback plain text reply failed', await fallbackRes?.text());
+						console.error('Fallback safe MarkdownV2 reply failed', await fallbackRes?.text());
 					}
 				}
 				return;
@@ -252,6 +261,59 @@ async function sendSummaryText(bot: any, text: string) {
  */
 function fixLink(text: string) {
 	return text.replace(/tme\.cat/g, "t.me/c").replace(/\/c\/c/g, "/c");
+}
+
+function formatSummaryAsTopicCards(text: string) {
+	const sanitized = text
+		// Remove any existing markdown fences the model may emit (escaped or unescaped).
+		.replace(/^\s*```[^\n]*\s*$/gm, "")
+		.replace(/^\s*\\`\\`\\`[^\n]*\s*$/gm, "")
+		.replace(/^\s*(?:\\`){3}[^\n]*\s*$/gm, "");
+	const lines = sanitized.replace(/\r\n/g, "\n").split("\n");
+	const topicHeaderRegex = /^\*?\s*Topic\s+\d+\s*:/i;
+	const topicIndexes: number[] = [];
+
+	for (let i = 0; i < lines.length; i++) {
+		if (topicHeaderRegex.test(lines[i].trim())) {
+			topicIndexes.push(i);
+		}
+	}
+
+	if (topicIndexes.length === 0) {
+		return text;
+	}
+
+	const intro = lines.slice(0, topicIndexes[0]).join("\n").trim();
+	const sections: string[] = [];
+
+	for (let i = 0; i < topicIndexes.length; i++) {
+		const start = topicIndexes[i];
+		const end = i + 1 < topicIndexes.length ? topicIndexes[i + 1] : lines.length;
+		const chunk = lines.slice(start, end);
+		const header = (chunk[0] || "").trim();
+		const bodyLines = chunk.slice(1);
+
+		let body = bodyLines.join("\n").trim();
+		if (!body) {
+			body = "No additional details.";
+		}
+		body = body.replace(/```/g, "'''");
+		const headerNoStars = header.replace(/^\*+/, "").replace(/\*+$/, "").trim();
+		const renderHeader = `*${headerNoStars}*`;
+
+		// Keep normal flow, but render AI opinion as a code block for visual emphasis.
+		const aiOpinionPattern = /(^|\n)(\*?\s*AI opinion:\*?\s*[^\n]*)/gi;
+		const bodyWithCodeOpinion = body.replace(aiOpinionPattern, (_m, prefix, opinionLine) => {
+			const unescaped = opinionLine
+				.replace(/\\([_\*\[\]\(\)~`>#+\-=|{}.!])/g, "$1")
+				.replace(/\\\\/g, "\\");
+			return `${prefix}\`\`\`\n${unescaped}\n\`\`\``;
+		});
+
+		sections.push(`${renderHeader}\n\n${bodyWithCodeOpinion}`.trim());
+	}
+
+	return `${intro}\n\n${sections.join("\n\n")}`.trim();
 }
 function getUserName(msg: any) {
 	if (msg?.sender_chat?.title) {
@@ -428,7 +490,7 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				res = await ctx.api.sendMessage(ctx.bot.api.toString(), {
 					"chat_id": userId,
 					"parse_mode": "MarkdownV2",
-					"text": foldText(response_text),
+					"text": response_text,
 					reply_to_message_id: -1,
 				});
 				if (!res.ok) {
@@ -547,10 +609,12 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 							temperature
 						})
 
-						const summaryText = messageTemplate(foldText(
-							fixLink(
-								processMarkdownLinks(telegramifyMarkdown(result.choices[0].message.content || "", 'keep')))));
-						await sendSummaryText(bot, summaryText);
+						const rawSummary = result.choices[0].message.content || "";
+						const summaryText = messageTemplate(
+							formatSummaryAsTopicCards(
+								fixLink(
+									processMarkdownLinks(telegramifyMarkdown(rawSummary, 'escape')))));
+						await sendSummaryText(bot, summaryText, `Summary by ${model}\n${rawSummary}`);
 					}
 					catch (e) {
 						console.error(e);
