@@ -121,7 +121,7 @@ const temperature = 0.4;
 function getGenModel(env: Env) {
 	const openai = new OpenAI({
 		apiKey: env.GEMINI_API_KEY,
-		baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+		baseURL: "https://api.tokener.ai/v1",
 		timeout: 999999999999,
 	});
 	const account_id = env.account_id;
