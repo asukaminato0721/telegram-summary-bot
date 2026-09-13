@@ -115,7 +115,7 @@ type R = {
 	messageId: number;
 	timeStamp: number;
 }
-const model = "gemini-2.5-flash-preview-09-2025";
+const model = "gpt-5.6-luna";
 const reasoning_effort = "none";
 const temperature = 0.4;
 function getGenModel(env: Env) {
