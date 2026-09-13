@@ -6,6 +6,7 @@ import telegramifyMarkdown from "telegramify-markdown"
 import { Buffer } from 'node:buffer';
 import { isJPEGBase64 } from './isJpeg';
 import { extractAllOGInfo } from "./og"
+import { logModelError } from './logModelError';
 function dispatchContent(content: string): { type: "text", text: string } | { type: "image_url", image_url: { url: string } } {
 	if (content.startsWith("data:image/jpeg;base64,")) {
 		return ({
@@ -116,8 +117,11 @@ type R = {
 	timeStamp: number;
 }
 const model = "gpt-5.6-luna";
-const reasoning_effort = "none";
-const temperature = 0.4;
+// Share GPT request settings across commands and scheduled summaries.
+const completionOptions = {
+	max_completion_tokens: 4096,
+	reasoning_effort: "none",
+} as const;
 function getGenModel(env: Env) {
 	const openai = new OpenAI({
 		apiKey: env.GEMINI_API_KEY,
@@ -172,7 +176,7 @@ function getCommandVar(str: string, delim: string) {
 }
 
 function messageTemplate(s: string) {
-	return `下面由免费 ${escapeMarkdownV2(model)} 概括群聊信息\n` + s + `\n本开源项目[地址](https://github\\.com/asukaminato0721/telegram-summary-bot)`;
+	return `下面由 ${escapeMarkdownV2(model)} 概括群聊信息\n` + s + `\n本开源项目[地址](https://github\\.com/asukaminato0721/telegram-summary-bot)`;
 }
 /**
  * 
@@ -280,8 +284,7 @@ export default {
 							]
 						)
 					}],
-				max_tokens: 4096,
-				temperature
+				...completionOptions,
 			})
 			if ([-1001687785734].includes(parseInt(group.groupId as string))) {
 				// todo: use cloudflare r2 to store skip list
@@ -299,9 +302,7 @@ export default {
 					chat_id: group.groupId,
 					text: messageTemplate(foldText(
 						fixLink(
-							//@ts-ignore
-							// str is at `result.choices[0].message`, no `.content`, why google do this?
-							processMarkdownLinks(telegramifyMarkdown(result.choices[0].message, 'keep'))))), 
+							processMarkdownLinks(telegramifyMarkdown(result.choices[0].message.content || "", 'keep'))))),
 					parse_mode: "MarkdownV2",
 				}),
 			});
@@ -413,11 +414,11 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 									content: `问题：${getCommandVar(messageText, " ")}`
 								}
 							],
-							max_tokens: 4096,
-							temperature
+							...completionOptions,
 						});
 				} catch (e) {
-					console.error(e);
+					logModelError(e, { command: 'ask', model }, [env.GEMINI_API_KEY, env.SECRET_TELEGRAM_API_TOKEN]);
+					await ctx.reply('回答失败，AI 服务暂时无法完成请求，请稍后重试。');
 					return new Response('ok');
 				}
 				let response_text: string;
@@ -492,7 +493,6 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 						const result = await getGenModel(env).chat.completions.create(
 							{
 								model,
-								// reasoning_effort,
 								messages: [
 									{
 										"role": "system",
@@ -510,8 +510,7 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 										)
 									}
 								],
-								max_tokens: 4096,
-								temperature
+								...completionOptions,
 							})
 
 
@@ -524,7 +523,8 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 						}
 					}
 					catch (e) {
-						console.error(e);
+						logModelError(e, { command: 'summary', model }, [env.GEMINI_API_KEY, env.SECRET_TELEGRAM_API_TOKEN]);
+						await bot.reply('概括失败，暂时无法完成请求，请稍后重试。');
 					}
 				}
 
