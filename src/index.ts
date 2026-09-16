@@ -116,7 +116,7 @@ type R = {
 	messageId: number;
 	timeStamp: number;
 }
-const model = "deepseek-v4-flash"; // gpt will block some output
+const model = "gpt-5.6-luna";
 // Share GPT request settings across commands and scheduled summaries.
 const completionOptions = {
 	max_completion_tokens: 4096,
