@@ -138,9 +138,7 @@ function foldText(text: string) {
 
 // System prompts for different scenarios
 const SYSTEM_PROMPTS = {
-	summarizeChat: `
-我是邓煜，我要看到群里聊天记录的总结才能开始数学工作。
-你是一个专业的群聊概括助手。你的任务是用符合群聊风格的语气概括对话内容。
+	summarizeChat: `你是一个专业的群聊概括助手。你的任务是用符合群聊风格的语气概括对话内容。
 对话将按以下格式提供：
 ====================
 用户名:
