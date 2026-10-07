@@ -6,7 +6,7 @@ import telegramifyMarkdown from "telegramify-markdown"
 import { Buffer } from 'node:buffer';
 import { isJPEGBase64 } from './isJpeg';
 import { extractAllOGInfo } from "./og"
-import { logModelError } from './logModelError';
+import { formatSummaryError, logModelError } from './logModelError';
 function dispatchContent(content: string): { type: "text", text: string } | { type: "image_url", image_url: { url: string } } {
 	if (content.startsWith("data:image/jpeg;base64,")) {
 		return ({
@@ -489,6 +489,7 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 						.all()).results;
 				}
 				if (results.length > 0) {
+					let stage = '请求 AI 服务';
 					try {
 						const result = await getGenModel(env).chat.completions.create(
 							{
@@ -514,17 +515,21 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 							})
 
 
-						let res = await bot.reply(
-							messageTemplate(foldText(
+						stage = '处理总结格式';
+						const text = messageTemplate(foldText(
 								fixLink(
-									processMarkdownLinks(telegramifyMarkdown(result.choices[0].message.content || "", 'keep'))))), 'MarkdownV2');
+									processMarkdownLinks(telegramifyMarkdown(result.choices[0].message.content || "", 'keep')))));
+						stage = '发送总结到 Telegram';
+						const res = await bot.reply(text, 'MarkdownV2');
 						if (!res?.ok) {
-							console.error("Failed to send reply", res?.statusText, await res?.text());
+							throw new Error(res
+								? `Telegram HTTP ${res.status}: ${await res.text()}`
+								: 'Telegram 未返回响应。');
 						}
 					}
 					catch (e) {
 						logModelError(e, { command: 'summary', model }, [env.GEMINI_API_KEY, env.SECRET_TELEGRAM_API_TOKEN]);
-						await bot.reply('概括失败，暂时无法完成请求，请稍后重试。');
+						await bot.reply(formatSummaryError(e, { model, stage }, [env.GEMINI_API_KEY, env.SECRET_TELEGRAM_API_TOKEN]));
 					}
 				}
 

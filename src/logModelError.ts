@@ -22,6 +22,42 @@ function sanitize(value: unknown, secrets: string[], depth = 0, budget = { left:
 	]));
 }
 
+export function formatSummaryError(
+	error: unknown,
+	context: { model: string; stage: string },
+	secrets: string[],
+): string {
+	const lines = [
+		'概括失败。',
+		`失败阶段：${context.stage}`,
+		`模型：${context.model}`,
+		`错误类型：${error instanceof Error ? error.name : 'UnknownError'}`,
+	];
+	let reason = error instanceof Error ? error.message : typeof error === 'string' ? error : '未知错误，请查看服务日志。';
+	if (error instanceof OpenAI.APIError) {
+		if (error.status != null) lines.push(`HTTP 状态码：${error.status}`);
+		if (error.code) lines.push(`错误代码：${error.code}`);
+		if (error.type) lines.push(`服务错误类型：${error.type}`);
+		if (error.param) lines.push(`相关参数：${error.param}`);
+		if (error.requestID) lines.push(`请求 ID：${error.requestID}`);
+		const retryAfter = error.headers?.get('retry-after');
+		if (retryAfter) lines.push(`服务建议的重试时间（Retry-After）：${retryAfter}`);
+		// The SDK can put the entire response body in error.message.
+		// Select the provider's text message instead of publishing that body.
+		if (error.error != null) {
+			const message = (error.error as Record<string, unknown>).message;
+			reason = typeof message === 'string' ? message : '服务未提供文本错误说明，请查看服务日志。';
+		}
+	}
+	lines.push(`错误原因：${reason || '未提供错误说明。'}`);
+	if (error instanceof Error && 'cause' in error && error.cause instanceof Error) {
+		lines.push(`底层原因：${error.cause.message}`);
+	}
+	// Redact before truncation so a truncated credential cannot become visible.
+	// This reply uses plain text and stays below Telegram's message limit.
+	return sanitize(lines.join('\n'), secrets) as string;
+}
+
 export function logModelError(
 	error: unknown,
 	context: { command: string; model: string },
