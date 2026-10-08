@@ -534,7 +534,9 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 					catch (e) {
 						const context = { command: 'summary', model, stage, request: requestDiagnostics };
 						logModelError(e, context, [env.GEMINI_API_KEY, env.SECRET_TELEGRAM_API_TOKEN]);
-						await bot.reply(formatSummaryError(e, context, [env.GEMINI_API_KEY, env.SECRET_TELEGRAM_API_TOKEN]));
+						const errorText = formatSummaryError(e, context, [env.GEMINI_API_KEY, env.SECRET_TELEGRAM_API_TOKEN])
+							.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+						await bot.reply(`<blockquote expandable>${errorText}</blockquote>`, 'HTML');
 					}
 				}
 

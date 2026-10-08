@@ -73,7 +73,7 @@ export function formatSummaryError(
 		lines.push(`底层原因：${error.cause.message}`);
 	}
 	// Redact before truncation so a truncated credential cannot become visible.
-	// This reply uses plain text and stays below Telegram's message limit.
+	// Return plain text within Telegram's message limit. Escape it before adding markup.
 	return sanitize(lines.join('\n'), secrets) as string;
 }
 
