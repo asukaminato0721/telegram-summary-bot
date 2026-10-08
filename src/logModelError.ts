@@ -1,4 +1,10 @@
 import OpenAI from 'openai';
+import type { RequestDiagnostics } from './requestDiagnostics';
+
+function getErrorName(error: unknown): string {
+	if (!(error instanceof Error)) return 'UnknownError';
+	return error.name === 'Error' ? error.constructor.name : error.name;
+}
 
 // Providers sometimes include credentials or echoed request bodies in errors.
 function sanitize(value: unknown, secrets: string[], depth = 0, budget = { left: 6000 }): unknown {
@@ -24,14 +30,14 @@ function sanitize(value: unknown, secrets: string[], depth = 0, budget = { left:
 
 export function formatSummaryError(
 	error: unknown,
-	context: { model: string; stage: string },
+	context: { model: string; stage: string; request?: RequestDiagnostics },
 	secrets: string[],
 ): string {
 	const lines = [
 		'概括失败。',
 		`失败阶段：${context.stage}`,
 		`模型：${context.model}`,
-		`错误类型：${error instanceof Error ? error.name : 'UnknownError'}`,
+		`错误类型：${getErrorName(error)}`,
 	];
 	let reason = error instanceof Error ? error.message : typeof error === 'string' ? error : '未知错误，请查看服务日志。';
 	if (error instanceof OpenAI.APIError) {
@@ -49,7 +55,20 @@ export function formatSummaryError(
 			reason = typeof message === 'string' ? message : '服务未提供文本错误说明，请查看服务日志。';
 		}
 	}
+	if (context.request) {
+		const request = context.request;
+		lines.push(
+			`群消息数：${request.record_count}，图片数：${request.image_count}`,
+			`内容片段数：${request.content_parts}，文本长度（UTF-16）：${request.text_chars}`,
+			`请求大小：${request.request_bytes} 字节`,
+		);
+		if (request.max_completion_tokens != null) lines.push(`max_completion_tokens：${request.max_completion_tokens}`);
+		if (request.reasoning_effort != null) lines.push(`reasoning_effort：${request.reasoning_effort}`);
+	}
 	lines.push(`错误原因：${reason || '未提供错误说明。'}`);
+	if (error instanceof OpenAI.APIError && error.status === 400 && /^invalid request\.?$/i.test(reason.trim())) {
+		lines.push('服务未说明具体原因。请用较少的消息测试，或将请求 ID 提供给 API 服务商查询。');
+	}
 	if (error instanceof Error && 'cause' in error && error.cause instanceof Error) {
 		lines.push(`底层原因：${error.cause.message}`);
 	}
@@ -60,7 +79,7 @@ export function formatSummaryError(
 
 export function logModelError(
 	error: unknown,
-	context: { command: string; model: string },
+	context: { command: string; model: string; stage?: string; request?: RequestDiagnostics },
 	secrets: string[],
 ) {
 	// Serialize explicitly: Workers may render an Error as only its stack.
@@ -68,7 +87,7 @@ export function logModelError(
 	const details = {
 		message: 'AI request failed',
 		...context,
-		error_name: error instanceof Error ? error.name : 'UnknownError',
+		error_name: getErrorName(error),
 		error_stack: error instanceof Error ? sanitize(error.stack, secrets) : undefined,
 		error_message: error instanceof Error ? error.message : String(error),
 		...(error instanceof Error && 'cause' in error ? {

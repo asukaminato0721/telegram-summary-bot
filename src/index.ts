@@ -7,6 +7,8 @@ import { Buffer } from 'node:buffer';
 import { isJPEGBase64 } from './isJpeg';
 import { extractAllOGInfo } from "./og"
 import { formatSummaryError, logModelError } from './logModelError';
+import { getRequestDiagnostics, type RequestDiagnostics } from './requestDiagnostics';
+import { compactContent } from './compactContent';
 function dispatchContent(content: string): { type: "text", text: string } | { type: "image_url", image_url: { url: string } } {
 	if (content.startsWith("data:image/jpeg;base64,")) {
 		return ({
@@ -275,14 +277,14 @@ export default {
 					},
 					{
 						"role": "user",
-						content: results.flatMap(
+						content: compactContent(results.flatMap(
 							(r: any) => [
 								dispatchContent(`====================`),
 								dispatchContent(`${r.userName}:`),
 								dispatchContent(r.content),
 								dispatchContent(getMessageLink(r)),
 							]
-						)
+						))
 					}],
 				...completionOptions,
 			})
@@ -400,14 +402,14 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 								},
 								{
 									"role": "user",
-									content: results.flatMap(
+									content: compactContent(results.flatMap(
 										(r: any) => [
 											dispatchContent(`====================`),
 											dispatchContent(`${r.userName}:`),
 											dispatchContent(r.content),
 											dispatchContent(getMessageLink(r)),
 										]
-									)
+									))
 								},
 								{
 									"role": "user",
@@ -490,9 +492,9 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				}
 				if (results.length > 0) {
 					let stage = '请求 AI 服务';
+					let requestDiagnostics: RequestDiagnostics | undefined;
 					try {
-						const result = await getGenModel(env).chat.completions.create(
-							{
+						const request: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
 								model,
 								messages: [
 									{
@@ -501,18 +503,20 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 									},
 									{
 										"role": "user",
-										content: results.flatMap(
+										content: compactContent(results.flatMap(
 											(r: any) => [
 												dispatchContent(`====================`),
 												dispatchContent(`${r.userName}:`),
 												dispatchContent(r.content),
 												dispatchContent(getMessageLink(r)),
 											]
-										)
+										))
 									}
 								],
 								...completionOptions,
-							})
+							};
+						requestDiagnostics = getRequestDiagnostics(request, results.length);
+						const result = await getGenModel(env).chat.completions.create(request);
 
 
 						stage = '处理总结格式';
@@ -528,8 +532,9 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 						}
 					}
 					catch (e) {
-						logModelError(e, { command: 'summary', model }, [env.GEMINI_API_KEY, env.SECRET_TELEGRAM_API_TOKEN]);
-						await bot.reply(formatSummaryError(e, { model, stage }, [env.GEMINI_API_KEY, env.SECRET_TELEGRAM_API_TOKEN]));
+						const context = { command: 'summary', model, stage, request: requestDiagnostics };
+						logModelError(e, context, [env.GEMINI_API_KEY, env.SECRET_TELEGRAM_API_TOKEN]);
+						await bot.reply(formatSummaryError(e, context, [env.GEMINI_API_KEY, env.SECRET_TELEGRAM_API_TOKEN]));
 					}
 				}
 
