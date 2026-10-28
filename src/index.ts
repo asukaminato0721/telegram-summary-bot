@@ -9,6 +9,7 @@ import { extractAllOGInfo } from "./og"
 import { formatSummaryError, logModelError } from './logModelError';
 import { getRequestDiagnostics, type RequestDiagnostics } from './requestDiagnostics';
 import { compactContent } from './compactContent';
+import { moderateMessage } from './moderation';
 function dispatchContent(content: string): { type: "text", text: string } | { type: "image_url", image_url: { url: string } } {
 	if (content.startsWith("data:image/jpeg;base64,")) {
 		return ({
@@ -543,6 +544,9 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				return new Response('ok');
 			})
 			.on(':message', async (bot) => {
+				if (bot.update.edited_message) return bot.bot.commands[':edited_message'](bot);
+				if (await moderateMessage(bot, env)) return new Response('ok');
+				if (!bot.update.message) return new Response('ok');
 				if (!bot.update.message!.chat.type.includes('group')) {
 					await bot.reply('I am a bot, please add me to a group to use me.');
 					return new Response('ok');
@@ -624,6 +628,7 @@ ${results.map((r: any) => `${r.userName}: ${r.content} ${r.messageId == null ? "
 				return new Response('ok');
 			})
 			.on(":edited_message", async (ctx) => {
+				if (await moderateMessage(ctx, env)) return new Response('ok');
 				const msg = ctx.update.edited_message!;
 				const groupId = msg.chat.id;
 				const content = msg.text || "";
