@@ -69,7 +69,6 @@ async function isProtected(message: Message, ctx: TelegramExecutionContext): Pro
 	if (message.sender_chat) {
 		return message.sender_chat.id === message.chat.id || message.is_automatic_forward === true;
 	}
-	if (message.from.is_bot) return true;
 	const member = await telegram<{ status: string }>(ctx, 'getChatMember', { chat_id: message.chat.id, user_id: message.from.id });
 	return ['creator', 'administrator'].includes(member.status);
 }
