@@ -119,7 +119,7 @@ type R = {
 	messageId: number;
 	timeStamp: number;
 }
-const model = "gpt-5.6-luna";
+const model = "gpt-6-luna";
 // Share GPT request settings across commands and scheduled summaries.
 const completionOptions = {
 	max_completion_tokens: 4096,
