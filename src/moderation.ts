@@ -59,8 +59,8 @@ async function telegram<T>(ctx: TelegramExecutionContext, method: string, parame
 	const response = await fetch(ctx.api.getApiUrl(ctx.bot.api.toString(), method, parameters), {
 		signal: AbortSignal.timeout(10_000),
 	});
-	const body = await response.json() as { ok: boolean; result: T };
-	if (!response.ok || body.ok !== true) throw new Error(`Telegram ${method} failed`);
+	const body = await response.json() as { ok: boolean; result: T; description: string };
+	if (!response.ok || body.ok !== true) throw new Error(`Telegram ${method} failed: ${body.description}`);
 	return body.result;
 }
 
@@ -81,7 +81,10 @@ async function removeMessage(message: Message, ctx: TelegramExecutionContext, en
 			: telegram<boolean>(ctx, 'banChatMember', { chat_id: message.chat.id, user_id: message.from.id, revoke_messages: true }),
 	]);
 	if (results.some(result => result.status === 'rejected')) {
-		console.error('Advertisement removal failed', { chat_id: message.chat.id, message_id: message.message_id });
+		console.error('Advertisement removal failed', {
+			chat_id: message.chat.id, message_id: message.message_id,
+			errors: results.flatMap(result => result.status === 'rejected' ? [result.reason.message] : []),
+		});
 	}
 	if (results.some(result => result.status === 'fulfilled' && result.value)) {
 		await env.DB.prepare('DELETE FROM Messages WHERE groupId = ? AND messageId = ?')
